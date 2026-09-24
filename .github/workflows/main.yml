@@ -1,0 +1,59 @@
+name: SQL Cursor Autograder
+
+on: [push, pull_request]
+
+jobs:
+  autograding:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testdb
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Database Schema and Test Data
+        run: |
+          mysql -h 127.0.0.1 -u root -proot testdb -e "
+          DROP TABLE IF EXISTS Student;
+          CREATE TABLE Student (
+              StudentID INT PRIMARY KEY,
+              StudentName VARCHAR(100),
+              DepartmentID INT
+          );
+          INSERT INTO Student (StudentID, StudentName, DepartmentID) VALUES
+          (101, 'Abirami', 1),
+          (102, 'Karthik', 2),
+          (103, 'Suresh', 1),
+          (104, 'Anitha', 3);
+          "
+
+      - name: Run Student Solution
+        run: |
+          mysql -h 127.0.0.1 -u root -proot testdb < solution.sql
+
+      - name: Test Procedure Output
+        run: |
+          # Execute procedure and verify student output
+          mysql -h 127.0.0.1 -u root -proot testdb -e "CALL FetchStudentRecords();" > actual_output.txt
+          
+          # Check if expected records are printed
+          grep -q "101" actual_output.txt && \
+          grep -q "Abirami" actual_output.txt && \
+          grep -q "Karthik" actual_output.txt
+
+      - name: Validate Cursor Usage
+        run: |
+          # Verify student solution contains key cursor keywords
+          grep -i -q "DECLARE.*CURSOR FOR" solution.sql && \
+          grep -i -q "OPEN" solution.sql && \
+          grep -i -q "FETCH" solution.sql && \
+          grep -i -q "CLOSE" solution.sql
